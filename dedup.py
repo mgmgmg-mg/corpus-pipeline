@@ -131,6 +131,7 @@ def main():
     p.add_argument("--input", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--truth", type=Path, default=Path("data/dedup_truth.json"))
+    p.add_argument("--no-eval", action="store_true", help="跑真实数据时跳过评测")
     p.add_argument("--threshold", type=float, default=0.8)
     p.add_argument("--shingle-size", type=int, default=5)
     p.add_argument("--shingle-type", choices=["char", "word"], default="char")
@@ -154,7 +155,7 @@ def main():
     print(f"\n=== 近重复去重（阈值 {args.threshold}，{args.shingle_type} {args.shingle_size}-gram）===")
     print(f"{len(kept)} -> {len(kept2)}   删除 {len(removed_near)}")
 
-    if args.truth.exists():
+    if not args.no_eval and args.truth.exists():
         evaluate(removed_exact + removed_near, args.truth)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

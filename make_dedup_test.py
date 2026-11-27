@@ -1,7 +1,7 @@
 """make_dedup_test.py —— 构造带已知重复的去重测试集
 
-流程：
-  1. 读 data/clean.jsonl，把每篇文档切成约 400 字符的块
+做法：
+  1. 读 data/clean.jsonl，切成约 400 字符的块（复用 chunking.py）
   2. 注入 100 条「完全复制」+ 200 条「轻微扰动复制」
   3. 输出：
        data/dedup_test.jsonl   待去重的语料（含重复）
@@ -14,40 +14,11 @@ import json
 import random
 from pathlib import Path
 
-CHUNK_MIN = 400        # 每块最少字符数
+from chunking import CHUNK_MIN, chunk_docs
+
 N_EXACT = 100          # 完全复制的条数
 N_NEAR = 200           # 扰动复制的条数
 SEED = 42              # 固定种子，结果可复现
-
-
-def chunk_docs(docs):
-    """把每篇文档按行累积切成约 CHUNK_MIN 字符的块。"""
-    chunks = []
-    for d in docs:
-        buf, size, idx = [], 0, 0
-
-        def flush():
-            nonlocal buf, size, idx
-            if buf:
-                chunks.append({
-                    "id": f'{d["id"]}-c{idx}',
-                    "source": d.get("source", ""),
-                    "text": " ".join(buf),
-                })
-                idx += 1
-                buf, size = [], 0
-
-        for line in d.get("text", "").split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            buf.append(line)
-            size += len(line)
-            if size >= CHUNK_MIN:
-                flush()
-        flush()
-
-    return chunks
 
 
 def perturb(text, rng):
@@ -78,20 +49,17 @@ def main():
     chunks = chunk_docs(docs)
     print(f"切成 {len(chunks)} 块，平均 {sum(len(c['text']) for c in chunks)/len(chunks):.0f} 字符/块")
 
-    # 可被复制的池子：太短的不要（去重测试没意义）
     pool = [c for c in chunks if len(c["text"]) >= CHUNK_MIN]
     random.shuffle(pool)
 
     truth = {"exact": [], "near": []}
     out = list(chunks)
 
-    # ① 完全复制
     for i, c in enumerate(pool[:N_EXACT]):
         new_id = f'{c["id"]}-exact{i}'
         out.append({"id": new_id, "source": c["source"], "text": c["text"]})
         truth["exact"].append({"dup": new_id, "orig": c["id"]})
 
-    # ② 扰动复制
     for i, c in enumerate(pool[N_EXACT: N_EXACT + N_NEAR]):
         new_id = f'{c["id"]}-near{i}'
         out.append({
